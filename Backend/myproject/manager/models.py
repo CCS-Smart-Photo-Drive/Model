@@ -46,16 +46,15 @@ class ImageEmbedding(db.Model):
     __tablename__ = 'image_embeddings'
 
     id = db.Column(db.Integer, primary_key=True)
-    event_name = db.Column(db.String(120), nullable=False)
     image_name = db.Column(db.String(120), nullable=False)
     embedding = db.Column(db.PickleType, nullable=False)
     event_id = db.Column(db.Integer, db.ForeignKey('events.id'), nullable=False)
-
-    def __init__(self, event_id, image_name, embedding):
+    event_name = db.Column(db.String(120), nullable=False)
+    def __init__(self, event_id, image_name, embedding , event_name):
         self.event_id = event_id
         self.image_name = image_name
         self.embedding = embedding
-
+        self.event_name = event_name
     def __repr__(self):
         return f"ImageEmbedding(event_id={self.event_id}, image_name={self.image_name})"
 
