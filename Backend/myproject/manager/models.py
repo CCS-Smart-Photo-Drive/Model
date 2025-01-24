@@ -19,5 +19,26 @@ class Manager(db.Model):
 
     def __repr__(self):
         return f"Manager email : {self.email}"
-        
+
+class Events(db.Model):
+
+    __tablename__ = 'events'
+
+    id = db.Column(db.Integer, primary_key=True)
+    event_name = db.Column(db.String(120), nullable=False)
+    date = db.Column(db.Date, nullable=False)
+    description = db.Column(db.String(500), nullable=True)
+    organised_by = db.Column(db.String(120), nullable=False)
+
+    def __init__(self, event_name, date, description, organised_by):
+        self.event_name = event_name
+        self.date = date
+        self.description = description
+        self.organised_by = organised_by
+
+    def __repr__(self):
+        return f"Event name: {self.event_name}, Date: {self.date}, Organised by: {self.organised_by}"
+
+
+
 
