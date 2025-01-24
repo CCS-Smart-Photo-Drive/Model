@@ -30,6 +30,8 @@ class Events(db.Model):
     description = db.Column(db.String(500), nullable=True)
     organised_by = db.Column(db.String(120), nullable=False)
 
+    image_embeddings = db.relationship('ImageEmbedding', backref='event', lazy=True)
+
     def __init__(self, event_name, date, description, organised_by):
         self.event_name = event_name
         self.date = date
@@ -38,6 +40,24 @@ class Events(db.Model):
 
     def __repr__(self):
         return f"Event name: {self.event_name}, Date: {self.date}, Organised by: {self.organised_by}"
+
+class ImageEmbedding(db.Model):
+
+    __tablename__ = 'image_embeddings'
+
+    id = db.Column(db.Integer, primary_key=True)
+    event_name = db.Column(db.String(120), nullable=False)
+    image_name = db.Column(db.String(120), nullable=False)
+    embedding = db.Column(db.PickleType, nullable=False)
+    event_id = db.Column(db.Integer, db.ForeignKey('events.id'), nullable=False)
+
+    def __init__(self, event_id, image_name, embedding):
+        self.event_id = event_id
+        self.image_name = image_name
+        self.embedding = embedding
+
+    def __repr__(self):
+        return f"ImageEmbedding(event_id={self.event_id}, image_name={self.image_name})"
 
 
 

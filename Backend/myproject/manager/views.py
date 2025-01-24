@@ -3,6 +3,10 @@ from myproject import db
 from myproject.manager.models import Manager, Events
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from datetime import datetime
+import zipfile
+import os
+from io import BytesIO
+from werkzeug.utils import secure_filename
 
 manager_bp = Blueprint('manager_bp' ,__name__)
 
@@ -126,5 +130,117 @@ def get_event_details():
     }), 200
 
 
+@manager_bp.route('/upload-images', methods=['POST'])
+@jwt_required()
+def upload_images():
+    # Validate content type and file presence
+    # if not request.content_type.startswith('multipart/form-data'):
+    #     return jsonify({'success': False, 'error': 'Content-Type must be multipart/form-data'}), 415
+
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'error': 'No file part'}), 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'success': False, 'error': 'No selected file'}), 400
+
+    if not zipfile.is_zipfile(file):
+        return jsonify({'success': False, 'error': 'File is not a zip file'}), 400
+
+    event_name = request.form.get('event_name')
+    if not event_name:
+        return jsonify({'success': False, 'error': 'Event name is required'}), 400
+
+    event = Events.query.filter_by(event_name=event_name).first()
+    if not event:
+        return jsonify({'success': False, 'error': 'Event not found'}), 404
+
+    # Create a secure directory for extraction
+    extract_path = os.path.join('uploads', secure_filename(event_name))
+    os.makedirs(extract_path, exist_ok=True)
+
+    try:
+        # Extract the zip file
+        with zipfile.ZipFile(file, 'r') as zip_ref:
+            # Validate files before extraction
+            invalid_files = [f for f in zip_ref.namelist() if not f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+            if invalid_files:
+                return jsonify({
+                    'success': False, 
+                    'error': f'Invalid files found: {", ".join(invalid_files)}. Only .png, .jpg, .jpeg allowed.'
+                }), 400
+
+            zip_ref.extractall(extract_path)
+
+        # Process each image
+        embeddings = []
+        for root, dirs, files in os.walk(extract_path):
+            for filename in files:
+                if filename.lower().endswith(('.png', '.jpg', '.jpeg')):
+                    image_path = os.path.join(root, filename)
+                    
+                    # Generate embedding for the image
+                    try:
+                        embedding = generate_embedding(image_path)
+                        embeddings.append({
+                            'event_id': event.id,
+                            'image_name': filename,
+                            'embedding': embedding
+                        })
+                    except Exception as e:
+                        print(f"Error processing {filename}: {str(e)}")
+                        # Optionally, you could choose to continue or return an error
+
+        # Batch insert embeddings
+        if embeddings:
+            bulk_embeddings = [
+                ImageEmbedding(
+                    event_id=emb['event_id'], 
+                    image_name=emb['image_name'], 
+                    embedding=emb['embedding']
+                ) for emb in embeddings
+            ]
+            db.session.bulk_save_objects(bulk_embeddings)
+            db.session.commit()
+
+        return jsonify({
+            "success": True, 
+            "message": f"Processed {len(embeddings)} images successfully!",
+            "total_images": len(embeddings)
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False, 
+            'error': f'Upload processing failed: {str(e)}'
+        }), 500
+    finally:
+        # Clean up extracted files
+        if os.path.exists(extract_path):
+            import shutil
+            shutil.rmtree(extract_path)
 
 
+def generate_embedding(image_path):
+    """
+    Generate image embedding using a machine learning model.
+    Replace with your actual embedding generation logic.
+    
+    Args:
+        image_path (str): Path to the image file
+    
+    Returns:
+        list: Image embedding vector
+    """
+    # Example placeholder - replace with actual embedding generation
+    from PIL import Image
+    import numpy as np
+    
+    # Open and preprocess image
+    img = Image.open(image_path)
+    img = img.resize((224, 224))  # Typical size for many ML models
+    
+    # Dummy embedding generation
+    # In real-world, you'd use a pre-trained model like ResNet or VGG
+    return np.random.rand(128).tolist()

@@ -30,4 +30,3 @@ app.register_blueprint(member_bp, url_prefix='/member')
 
 from myproject.manager.views import manager_bp
 app.register_blueprint(manager_bp , url_prefix='/manager')
-
