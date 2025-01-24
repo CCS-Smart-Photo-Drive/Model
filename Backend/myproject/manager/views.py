@@ -2,6 +2,7 @@ from flask import Flask, redirect, url_for, Blueprint, request, jsonify
 from myproject import db 
 from myproject.manager.models import Manager, Events
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
+from datetime import datetime
 
 manager_bp = Blueprint('manager_bp' ,__name__)
 
@@ -60,14 +61,20 @@ def logout():
 @jwt_required()
 def create_event():
     data = request.json
-    title = data.get('title')
+    event_name = data.get('event_name')
     description = data.get('description')
-    date = data.get('date')
+    date_str = data.get('date') # YYYY-MM-DD
+    organised_by = data.get('organised_by')
 
-    if not title or not description or not date:
+    if not event_name or not description or not date_str:
         return jsonify({'success': False, 'error': 'Missing required fields'}), 400
 
-    new_event = Events(title=title, description=description, date=date)
+    try:
+        date = datetime.strptime(date_str, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'success': False, 'error': 'Invalid date format. Use YYYY-MM-DD.'}), 400
+
+    new_event = Events(event_name=event_name, description=description, date=date, organised_by=organised_by)
     db.session.add(new_event)
     db.session.commit()
 
@@ -78,18 +85,32 @@ def create_event():
 @jwt_required()
 def get_events():
     events = Events.query.all()
-    return jsonify([event.__dict__ for event in events]), 200
+    events_list = []
+    for event in events:
+        events_list.append({
+            'event_name': event.event_name,
+            'description': event.description,
+            'date': event.date.strftime('%Y-%m-%d'),
+            'organised_by': event.organised_by
+        })
+    return jsonify(events_list), 200
 
 
-@manager_bp.route('/event-details', methods=['GET'])
+@manager_bp.route('/event-details', methods=['GET', 'POST'])
 @jwt_required()
 def get_event_details():
-    title = request.args.get('title')
+    if request.method == 'GET':
+        event_name = request.args.get('event_name')
+    else:  # POST
+        data = request.json
+        event_name = data.get('event_name')
 
-    if not title:
-        return jsonify({'success': False, 'error': 'Title is required'}), 400
+    print(f"Received event_name: {event_name}")  # Debug statement
 
-    event = Events.query.filter_by(title=title).first()
+    if not event_name:
+        return jsonify({'success': False, 'error': 'Event name is required'}), 400
+
+    event = Events.query.filter_by(event_name=event_name).first()
 
     if not event:
         return jsonify({'success': False, 'error': 'Event not found'}), 404
@@ -97,7 +118,7 @@ def get_event_details():
     return jsonify({
         'success': True,
         'event': {
-            'title': event.title,
+            'event_name': event.event_name,
             'description': event.description,
             'date': event.date,
             'organised_by': event.organised_by
